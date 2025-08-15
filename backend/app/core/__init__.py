@@ -1,0 +1,1 @@
+# Configuration et dépendances centrales de l'application 
