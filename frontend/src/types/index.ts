@@ -3,6 +3,7 @@ export * from './project'
 export * from './aiModel'
 export * from './prompt'
 export * from './analysis'
+export * from './serp'
 
 // Types pour l'API Visibility Tracker (anciens types conservés pour compatibilité)
 export interface Project {

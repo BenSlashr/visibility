@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from .endpoints import projects, ai_models, prompts, analyses, sources
+from .endpoints import projects, ai_models, prompts, analyses, sources, serp
 
 api_router = APIRouter()
 
@@ -33,4 +33,10 @@ api_router.include_router(
     sources.router,
     prefix="/sources",
     tags=["sources"]
+)
+
+api_router.include_router(
+    serp.router,
+    prefix="/serp",
+    tags=["serp", "seo"]
 )

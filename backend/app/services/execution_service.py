@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from .ai_service import ai_service, AIServiceError
 from .prompt_service import prompt_service, PromptServiceError
 from .analysis_service import analysis_service, AnalysisServiceError
+from ..nlp.adapters.legacy_adapter import legacy_nlp_service
 from ..crud.prompt import crud_prompt
 from ..crud.analysis import crud_analysis
 from ..crud.analysis_source import crud_analysis_source
@@ -163,7 +164,17 @@ class ExecutionService:
                 )
                 db_analysis = crud_analysis.create_with_competitors(db, obj_in=analysis_data)
 
-                # 6. Extraire et persister les sources
+                # 6. Analyse NLP automatique
+                try:
+                    nlp_topics = legacy_nlp_service.analyze_analysis(db, db_analysis)
+                    if nlp_topics:
+                        logger.debug(f"Analyse NLP réussie pour l'analyse {db_analysis.id}")
+                    else:
+                        logger.warning(f"Analyse NLP échouée pour l'analyse {db_analysis.id}")
+                except Exception as e:
+                    logger.warning(f"Erreur lors de l'analyse NLP pour l'analyse {db_analysis.id}: {e}")
+
+                # 7. Extraire et persister les sources
                 try:
                     sources = source_extractor.extract(ai_result['ai_response'])
                     # Filtrer: exclure les domaines concurrents

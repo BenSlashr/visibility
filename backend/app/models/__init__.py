@@ -9,7 +9,9 @@ from .ai_model import AIModel
 from .prompt import Prompt, PromptTag, PromptAIModel
 from .analysis import Analysis, AnalysisCompetitor
 from .analysis_source import AnalysisSource
+from .analysis_topics import AnalysisTopics
 from .app_setting import AppSetting
+from .serp import SERPImport, SERPKeyword, PromptSERPAssociation
 
 # Export pour faciliter les imports
 __all__ = [
@@ -27,5 +29,9 @@ __all__ = [
     'Analysis',
     'AnalysisCompetitor',
     'AnalysisSource',
-    'AppSetting'
+    'AnalysisTopics',
+    'AppSetting',
+    'SERPImport',
+    'SERPKeyword',
+    'PromptSERPAssociation'
 ] 

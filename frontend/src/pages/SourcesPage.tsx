@@ -237,8 +237,9 @@ export const SourcesPage: React.FC = () => {
         </div>
 
         {/* Filtres avancés */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
+          {/* Première ligne : Selects */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <div className="text-xs text-gray-700 mb-1">Lien vers votre site</div>
               <Select
@@ -264,7 +265,7 @@ export const SourcesPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Input placeholder="ex: wikipedia.org" value={domainFilter} onChange={(e)=>setDomainFilter(e.target.value)} className="w-full" />
                 {domainFilter && (
-                  <button className="text-gray-500 hover:text-gray-800" aria-label="Effacer" onClick={()=>setDomainFilter('')}>
+                  <button className="text-gray-500 hover:text-gray-800 flex-shrink-0" aria-label="Effacer" onClick={()=>setDomainFilter('')}>
                     <X className="h-4 w-4" />
                   </button>
                 )}
@@ -294,18 +295,42 @@ export const SourcesPage: React.FC = () => {
                 ]}
               />
             </div>
-            <div className="flex items-center">
-              <label className="inline-flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" className="form-checkbox" checked={excludeCompetitors} onChange={(e)=>setExcludeCompetitors(e.target.checked)} />
-                <span className="text-sm text-gray-700">Exclure concurrents</span>
-              </label>
-            </div>
-            <div className="flex items-center">
-              <label className="inline-flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" className="form-checkbox" checked={uniqueByDomain} onChange={(e)=>setUniqueByDomain(e.target.checked)} />
-                <span className="text-sm text-gray-700">1 source par domaine</span>
-              </label>
-            </div>
+          </div>
+
+          {/* Deuxième ligne : Checkboxes et filtres supplémentaires */}
+          <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-gray-100">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                checked={excludeCompetitors} 
+                onChange={(e)=>setExcludeCompetitors(e.target.checked)} 
+              />
+              <span className="text-sm text-gray-700">Exclure concurrents</span>
+            </label>
+            
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                checked={uniqueByDomain} 
+                onChange={(e)=>setUniqueByDomain(e.target.checked)} 
+              />
+              <span className="text-sm text-gray-700">1 source par domaine</span>
+            </label>
+
+            {/* Marque mentionnée (si besoin d'un filtre supplémentaire) */}
+            {brandMentioned && (
+              <div className="inline-flex items-center gap-2">
+                <span className="text-xs text-gray-500">Marque mentionnée:</span>
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs">
+                  {brandMentioned === 'true' ? 'Oui' : 'Non'}
+                  <button onClick={() => setBrandMentioned('')} className="text-blue-500 hover:text-blue-700">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

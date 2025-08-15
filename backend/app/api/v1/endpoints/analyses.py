@@ -3,11 +3,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from datetime import datetime, timedelta
 from sqlalchemy.orm import joinedload
 from sqlalchemy import and_
+import logging
 from app.models.prompt import Prompt, PromptTag
 from app.models.analysis import Analysis
+from app.models.analysis_topics import AnalysisTopics
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_database_session
+from app.core.database import get_db
+from app.nlp.adapters.legacy_adapter import legacy_nlp_service
 from app.crud.analysis import crud_analysis
 from app.crud.project import crud_project
 from app.crud.prompt import crud_prompt
@@ -16,6 +20,8 @@ from app.schemas.analysis import (
     AnalysisStats, ProjectAnalysisStats, AnalysisCompetitorRead,
     AnalysisSourceRead
 )
+
+logger = logging.getLogger(__name__)
 from app.crud.analysis_source import crud_analysis_source
 
 router = APIRouter()
@@ -29,6 +35,7 @@ def get_analyses(
     brand_mentioned: Optional[bool] = Query(None, description="Filtrer par mention de marque"),
     has_ranking: Optional[bool] = Query(None, description="Filtrer par présence de classement"),
     search: Optional[str] = Query(None, description="Recherche dans les réponses IA"),
+    prompt_text: Optional[str] = Query(None, description="Filtrer par texte exact du prompt"),
     model_id: Optional[str] = Query(None, description="Filtrer par modèle IA"),
     date_from: Optional[str] = Query(None, description="Date de début (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Date de fin (YYYY-MM-DD)"),
@@ -40,6 +47,11 @@ def get_analyses(
     Récupère la liste des analyses avec filtres avancés
     """
     base_query = db.query(Analysis)
+    
+    # Filtre par prompt_text (recherche partielle dans le template du prompt)
+    if prompt_text:
+        base_query = base_query.join(Prompt).filter(Prompt.template.contains(prompt_text))
+    
     if project_id:
         base_query = base_query.filter(Analysis.project_id == project_id)
     if prompt_id:
@@ -153,6 +165,186 @@ def create_analysis(
     
     analysis = crud_analysis.create_with_competitors(db, obj_in=analysis_in)
     return crud_analysis.get_with_relations(db, analysis.id)
+
+# --- Gap Analysis (DOIT ÊTRE AVANT /{analysis_id}) ---
+@router.get("/gap-analysis", response_model=Dict[str, Any])
+def get_gap_analysis(
+    project_id: str = Query(..., description="ID du projet"),
+    date_from: Optional[str] = Query(None, description="Date de début (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Date de fin (YYYY-MM-DD)"),
+    competitor_filter: Optional[str] = Query(None, description="Filtrer par concurrent spécifique"),
+    priority_filter: Optional[str] = Query(None, description="Filtrer par priorité (critical, medium, low)"),
+    db: Session = Depends(get_database_session)
+):
+    """
+    Analyse des gaps de visibilité par rapport aux concurrents.
+    
+    Cette API identifie les requêtes où les concurrents sont bien positionnés
+    mais où notre marque/site est peu ou pas mentionnée.
+    """
+    # Vérifier que le projet existe
+    project = crud_project.get_or_404(db, project_id)
+    
+    # Construire la requête de base
+    query = db.query(Analysis).options(
+        joinedload(Analysis.competitors),
+        joinedload(Analysis.prompt)
+    ).filter(Analysis.project_id == project_id)
+    
+    # Filtres de dates
+    if date_from:
+        try:
+            start_dt = datetime.fromisoformat(date_from)
+            query = query.filter(Analysis.created_at >= start_dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Paramètre date_from invalide (ISO attendu)")
+    if date_to:
+        try:
+            end_dt = datetime.fromisoformat(date_to)
+            end_next = end_dt + timedelta(days=1)
+            query = query.filter(Analysis.created_at < end_next)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Paramètre date_to invalide (ISO attendu)")
+    
+    analyses = query.all()
+    
+    # Charger les tags des prompts
+    prompt_ids = {a.prompt_id for a in analyses}
+    prompt_tags_rows = db.query(PromptTag).filter(PromptTag.prompt_id.in_(prompt_ids)).all() if prompt_ids else []
+    prompt_tags: Dict[str, List[str]] = {}
+    for pt in prompt_tags_rows:
+        prompt_tags.setdefault(pt.prompt_id, []).append(pt.tag_name)
+    
+    # Analyser les gaps
+    from collections import defaultdict
+    
+    # Structure: prompt_executed -> competitor -> [analyses]
+    query_competitors = defaultdict(lambda: defaultdict(list))
+    query_our_performance = defaultdict(lambda: {"brand_mentions": 0, "website_mentions": 0, "total": 0})
+    
+    for analysis in analyses:
+        query_key = analysis.prompt_executed[:100]  # Tronquer pour grouper les requêtes similaires
+        
+        # Performance de notre marque/site
+        perf = query_our_performance[query_key]
+        perf["total"] += 1
+        if analysis.brand_mentioned:
+            perf["brand_mentions"] += 1
+        if analysis.website_mentioned:
+            perf["website_mentions"] += 1
+        
+        # Performance des concurrents
+        for competitor in analysis.competitors:
+            if competitor.is_mentioned:
+                query_competitors[query_key][competitor.competitor_name].append(analysis)
+    
+    # Calculer les gaps
+    gaps = []
+    gap_id = 1
+    
+    for query_text, competitors in query_competitors.items():
+        our_perf = query_our_performance[query_text]
+        our_rate = max(
+            (our_perf["brand_mentions"] / our_perf["total"]) * 100 if our_perf["total"] > 0 else 0,
+            (our_perf["website_mentions"] / our_perf["total"]) * 100 if our_perf["total"] > 0 else 0
+        )
+        
+        for competitor_name, comp_analyses in competitors.items():
+            # Filtrer par concurrent si demandé
+            if competitor_filter and competitor_name != competitor_filter:
+                continue
+                
+            # Calculer les métriques du concurrent
+            competitor_mentions = len(comp_analyses)
+            total_analyses = our_perf["total"]
+            competitor_rate = (competitor_mentions / total_analyses) * 100 if total_analyses > 0 else 0
+            
+            # Calculer le gap score
+            gap_score = max(0, competitor_rate - our_rate)
+            
+            # Déterminer le type de gap
+            if gap_score >= 70:
+                gap_type = "critical"
+            elif gap_score >= 40:
+                gap_type = "medium"  
+            else:
+                gap_type = "low"
+            
+            # Filtrer par priorité si demandé
+            if priority_filter and gap_type != priority_filter:
+                continue
+            
+            # Estimer la pertinence business (basé sur les tags et le contenu)
+            sample_analysis = comp_analyses[0]
+            tags = prompt_tags.get(sample_analysis.prompt_id, [])
+            
+            # Heuristique de pertinence basée sur les tags
+            high_value_tags = ["commercial", "prix", "comparaison", "meilleur", "alternative"]
+            medium_value_tags = ["guide", "tutoriel", "comment"]
+            
+            business_relevance = "low"
+            for tag in tags:
+                if any(hvt in tag.lower() for hvt in high_value_tags):
+                    business_relevance = "high"
+                    break
+                elif any(mvt in tag.lower() for mvt in medium_value_tags):
+                    business_relevance = "medium"
+            
+            # Action suggérée
+            if our_rate == 0:
+                suggested_action = f"Créer contenu ciblant '{query_text[:50]}...'"
+            elif our_rate < competitor_rate / 2:
+                suggested_action = f"Optimiser contenu existant pour '{query_text[:50]}...'"
+            else:
+                suggested_action = f"Améliorer positionnement sur '{query_text[:50]}...'"
+            
+            # Vérifier si du contenu existe (basé sur notre taux > 0)
+            content_exists = our_rate > 0
+            
+            gaps.append({
+                "id": str(gap_id),
+                "query": query_text,
+                "prompt_id": sample_analysis.prompt_id,  # Ajout du prompt_id pour filtrage précis
+                "competitor_name": competitor_name,
+                "competitor_mentions": competitor_mentions,
+                "competitor_rate": round(competitor_rate, 1),
+                "our_mentions": our_perf["brand_mentions"] + our_perf["website_mentions"],
+                "our_rate": round(our_rate, 1),
+                "gap_score": round(gap_score, 1),
+                "frequency_estimate": max(1, int(total_analyses * 4.33)),  # Estimation mensuelle
+                "last_seen": comp_analyses[-1].created_at.isoformat(),
+                "gap_type": gap_type,
+                "business_relevance": business_relevance,
+                "suggested_action": suggested_action,
+                "content_exists": content_exists
+            })
+            
+            gap_id += 1
+    
+    # Trier par gap score décroissant
+    gaps.sort(key=lambda x: x["gap_score"], reverse=True)
+    
+    # Calculer les statistiques globales
+    total_gaps = len(gaps)
+    critical_gaps = len([g for g in gaps if g["gap_type"] == "critical"])
+    medium_gaps = len([g for g in gaps if g["gap_type"] == "medium"])
+    low_gaps = len([g for g in gaps if g["gap_type"] == "low"])
+    
+    average_gap_score = round(sum(g["gap_score"] for g in gaps) / total_gaps, 1) if total_gaps > 0 else 0
+    potential_monthly_mentions = sum(g["frequency_estimate"] for g in gaps if g["gap_type"] in ["critical", "medium"])
+    
+    return {
+        "gaps": gaps,
+        "stats": {
+            "total_gaps": total_gaps,
+            "critical_gaps": critical_gaps,
+            "medium_gaps": medium_gaps,
+            "low_gaps": low_gaps,
+            "average_gap_score": average_gap_score,
+            "potential_monthly_mentions": potential_monthly_mentions,
+            "total_analyses_analyzed": len(analyses)
+        }
+    }
 
 @router.get("/{analysis_id}", response_model=AnalysisRead)
 def get_analysis(
@@ -676,3 +868,214 @@ def get_tags_heatmap(
         for t, cnt in heat[day].items():
             points.append({"date": day, "tag": t, "count": cnt})
     return {"points": points}
+
+# =============================================================================
+# NLP ANALYSIS ENDPOINTS
+# =============================================================================
+
+@router.get("/{analysis_id}/nlp", response_model=Dict[str, Any])
+def get_analysis_nlp(
+    analysis_id: str = Path(..., description="ID de l'analyse"),
+    db: Session = Depends(get_database_session)
+):
+    """
+    Récupère l'analyse NLP complète d'une analyse spécifique
+    """
+    # Vérifier que l'analyse existe
+    analysis = crud_analysis.get_or_404(db, analysis_id)
+    
+    # Récupérer les topics existants
+    topics = legacy_nlp_service.get_analysis_topics(db, analysis_id)
+    
+    if not topics:
+        # Si pas de topics, les générer
+        topics = legacy_nlp_service.analyze_analysis(db, analysis)
+        if not topics:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Impossible d'analyser le contenu NLP"
+            )
+    
+    return {
+        "analysis_id": analysis_id,
+        "nlp_results": {
+            "seo_intent": {
+                "main_intent": topics.seo_intent,
+                "confidence": topics.seo_confidence,
+                "detailed_scores": topics.seo_detailed_scores
+            },
+            "business_topics": topics.business_topics,
+            "content_type": {
+                "main_type": topics.content_type,
+                "confidence": topics.content_confidence
+            },
+            "sector_entities": topics.sector_entities,
+            "semantic_keywords": topics.semantic_keywords,
+            "global_confidence": topics.global_confidence,
+            "sector_context": topics.sector_context,
+            "processing_version": topics.processing_version,
+            "created_at": topics.created_at.isoformat() if topics.created_at else None
+        }
+    }
+
+@router.post("/{analysis_id}/nlp/reanalyze", response_model=Dict[str, Any])
+def reanalyze_analysis_nlp(
+    analysis_id: str = Path(..., description="ID de l'analyse"),
+    db: Session = Depends(get_database_session)
+):
+    """
+    Force la re-analyse NLP d'une analyse spécifique
+    """
+    # Vérifier que l'analyse existe
+    analysis = crud_analysis.get_or_404(db, analysis_id)
+    
+    # Supprimer l'analyse NLP existante si elle existe
+    existing_topics = db.query(AnalysisTopics).filter(
+        AnalysisTopics.analysis_id == analysis_id
+    ).first()
+    
+    if existing_topics:
+        db.delete(existing_topics)
+        db.commit()
+    
+    # Re-analyser
+    topics = legacy_nlp_service.analyze_analysis(db, analysis)
+    
+    if not topics:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Impossible de re-analyser le contenu NLP"
+        )
+    
+    return {
+        "success": True,
+        "analysis_id": analysis_id,
+        "message": "Analyse NLP mise à jour avec succès",
+        "new_results": topics.to_summary_dict()
+    }
+
+@router.get("/nlp/project-summary/{project_id}", response_model=Dict[str, Any])
+def get_project_nlp_summary(
+    project_id: str = Path(..., description="ID du projet"),
+    limit: int = Query(100, ge=1, le=500, description="Nombre max d'analyses à considérer"),
+    db: Session = Depends(get_database_session)
+):
+    """
+    Résumé NLP pour toutes les analyses d'un projet
+    """
+    # Vérifier que le projet existe
+    project = crud_project.get_or_404(db, project_id)
+    
+    # Obtenir le résumé
+    summary = legacy_nlp_service.get_project_summary(db, project_id, limit)
+    
+    return {
+        "project_id": project_id,
+        "project_name": project.name,
+        "summary": summary,
+        "limit_applied": limit
+    }
+
+@router.get("/nlp/project-trends/{project_id}", response_model=Dict[str, Any])
+def get_project_nlp_trends(
+    project_id: str = Path(..., description="ID du projet"),
+    days: int = Query(30, ge=7, le=365, description="Nombre de jours à analyser"),
+    db: Session = Depends(get_database_session)
+):
+    """
+    Analyse des tendances NLP pour un projet sur une période
+    """
+    # Vérifier que le projet existe
+    project = crud_project.get_or_404(db, project_id)
+    
+    # Obtenir les tendances  
+    trends = legacy_nlp_service.get_topics_trends(db, project_id, days)
+    
+    return {
+        "project_id": project_id,
+        "project_name": project.name,
+        "trends_data": trends
+    }
+
+@router.post("/nlp/batch-analyze", response_model=Dict[str, Any])
+def batch_analyze_nlp(
+    analysis_ids: List[str],
+    db: Session = Depends(get_database_session)
+):
+    """
+    Analyse NLP en lot pour plusieurs analyses
+    """
+    if len(analysis_ids) > 50:  # Limite pour éviter la surcharge
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 50 analyses peuvent être traitées en une fois"
+        )
+    
+    # Vérifier que toutes les analyses existent
+    existing_analyses = db.query(Analysis.id).filter(Analysis.id.in_(analysis_ids)).all()
+    existing_ids = {a.id for a in existing_analyses}
+    missing_ids = set(analysis_ids) - existing_ids
+    
+    if missing_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Analyses introuvables: {list(missing_ids)}"
+        )
+    
+    # Analyser en lot
+    results = legacy_nlp_service.analyze_batch(db, analysis_ids)
+    
+    success_count = sum(results.values())
+    failure_count = len(analysis_ids) - success_count
+    
+    return {
+        "total_requested": len(analysis_ids),
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "results": results,
+        "success_rate": round(success_count / len(analysis_ids) * 100, 1) if analysis_ids else 0
+    }
+
+@router.post("/nlp/project-reanalyze/{project_id}", response_model=Dict[str, Any])
+def reanalyze_project_nlp(
+    project_id: str = Path(..., description="ID du projet"),
+    db: Session = Depends(get_database_session)
+):
+    """
+    Re-analyse complète des topics NLP d'un projet
+    Utile après mise à jour des dictionnaires de mots-clés
+    """
+    # Vérifier que le projet existe
+    project = crud_project.get_or_404(db, project_id)
+    
+    # Lancer la re-analyse
+    result = legacy_nlp_service.reanalyze_project(db, project_id)
+    
+    if not result.get('success'):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get('message', 'Erreur lors de la re-analyse')
+        )
+    
+    return {
+        "project_id": project_id,
+        "project_name": project.name,
+        **result
+    }
+
+@router.get("/nlp/available-sectors", response_model=List[str])
+def get_available_sectors():
+    """
+    Liste des secteurs disponibles pour la classification NLP
+    """
+    return legacy_nlp_service.get_available_sectors()
+
+@router.get("/nlp/stats/global", response_model=Dict[str, Any])
+def get_global_nlp_stats(
+    db: Session = Depends(get_database_session)
+):
+    """
+    Statistiques globales NLP sur toutes les analyses
+    """
+    return legacy_nlp_service.get_global_nlp_stats(db)
+

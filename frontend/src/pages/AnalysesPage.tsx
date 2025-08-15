@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Filter, Download, TrendingUp, TrendingDown, BarChart3, RefreshCw, MessageSquare, Bot } from 'lucide-react'
+import { Search, Filter, Download, TrendingUp, TrendingDown, BarChart3, RefreshCw, MessageSquare, Bot, Brain } from 'lucide-react'
 import { AnalysisCard } from '../components/AnalysisCard'
 import { Button, Input, Modal, Loading } from '../components/ui'
 import { useAnalyses } from '../hooks/useAnalyses'
 import { useCurrentProject } from '../contexts/ProjectContext'
 import { useProjects } from '../hooks/useProjects'
 import { AnalysesAPI } from '../services/analyses'
+import { NLPInsightsCard } from '../components/nlp/NLPInsightsCard'
+import { useNLPAnalysis } from '../hooks/useNLPAnalysis'
 import type { AnalysisFilters, AnalysisSummary, Analysis } from '../types/analysis'
 
 export const AnalysesPage: React.FC = () => {
@@ -41,6 +43,12 @@ export const AnalysesPage: React.FC = () => {
   const [selectedAnalysisDetails, setSelectedAnalysisDetails] = useState<Analysis | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+  const [activeTab, setActiveTab] = useState<'details' | 'nlp'>('details')
+
+  // Hook NLP pour l'analyse sélectionnée
+  const { nlpData, loading: nlpLoading, error: nlpError, reanalyze: reanalyzeNLP } = useNLPAnalysis(
+    selectedAnalysis?.id || null
+  )
 
   // Mise à jour des filtres quand le projet actuel change
   useEffect(() => {
@@ -73,6 +81,8 @@ export const AnalysesPage: React.FC = () => {
     const dateParam = searchParams.get('date')
     const tag = searchParams.get('tag')
     const modelId = searchParams.get('model_id')
+    const promptText = searchParams.get('prompt_text')
+    const promptId = searchParams.get('prompt_id')
     if (modelId) (newFilters as any).model_id = modelId
     if (dateParam) {
       // Filtrer du jour 'date' à 'date'
@@ -80,6 +90,8 @@ export const AnalysesPage: React.FC = () => {
       (newFilters as any)['date_to'] = dateParam as string
     }
     if (tag) (newFilters as any).tag = tag
+    if (promptText) (newFilters as any).prompt_text = promptText
+    if (promptId) (newFilters as any).prompt_id = promptId
     if (withSourcesOnly) (newFilters as any).has_sources = true
 
     setFilters(newFilters)
@@ -112,6 +124,7 @@ export const AnalysesPage: React.FC = () => {
     setSelectedAnalysisDetails(null)
     setIsDetailModalOpen(true)
     setIsLoadingDetails(true)
+    setActiveTab('details') // Reset to details tab
     
     try {
       const fullAnalysis = await AnalysesAPI.getById(analysis.id)
@@ -177,6 +190,12 @@ export const AnalysesPage: React.FC = () => {
                 Historique et résultats de vos exécutions
                 {currentProject && (
                   <span className="ml-2 text-blue-600">• {currentProject.name}</span>
+                )}
+                {/* Debug temporaire - à supprimer */}
+                {(searchParams.get('search') || searchParams.get('prompt_id')) && (
+                  <span className="ml-2 text-orange-600 font-mono text-xs">
+                    [DEBUG: {searchParams.get('search') ? `search="${searchParams.get('search')}"` : ''} {searchParams.get('prompt_id') ? `prompt_id="${searchParams.get('prompt_id')}"` : ''} | project={searchParams.get('project_id')}]
+                  </span>
                 )}
               </p>
             </div>
@@ -371,8 +390,42 @@ export const AnalysesPage: React.FC = () => {
       >
         {selectedAnalysis && (
           <div className="space-y-6">
-            {/* Info générale */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Onglets */}
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8">
+                <button
+                  onClick={() => setActiveTab('details')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'details'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Détails de l'analyse
+                </button>
+                <button
+                  onClick={() => setActiveTab('nlp')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
+                    activeTab === 'nlp'
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Brain className="w-4 h-4" />
+                  Insights NLP
+                  {nlpData && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      Analysé
+                    </span>
+                  )}
+                </button>
+              </nav>
+            </div>
+            {/* Contenu des onglets */}
+            {activeTab === 'details' && (
+              <div className="space-y-6">
+                {/* Info générale */}
+                <div className="grid grid-cols-2 gap-4">
               <div>
                 <h4 className="font-medium text-gray-900 mb-2">Projet</h4>
                 <p className="text-sm text-gray-600">
@@ -488,28 +541,87 @@ export const AnalysesPage: React.FC = () => {
             </div>
             )}
 
-            {/* Métriques techniques */}
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t">
-              <div className="text-center">
-                <div className="text-lg font-bold text-gray-900">
-                  {selectedAnalysis.tokens_used}
+                {/* Métriques techniques */}
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-gray-900">
+                      {selectedAnalysis.tokens_used}
+                    </div>
+                    <div className="text-sm text-gray-600">Tokens utilisés</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-gray-900">
+                      ${selectedAnalysis.cost_estimated.toFixed(4)}
+                    </div>
+                    <div className="text-sm text-gray-600">Coût estimé</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-gray-900">
+                      {new Date(selectedAnalysis.created_at).toLocaleDateString('fr-FR')}
+                    </div>
+                    <div className="text-sm text-gray-600">Date d'analyse</div>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600">Tokens utilisés</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-gray-900">
-                  ${selectedAnalysis.cost_estimated.toFixed(4)}
-                </div>
-                <div className="text-sm text-gray-600">Coût estimé</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-gray-900">
-                  {new Date(selectedAnalysis.created_at).toLocaleDateString('fr-FR')}
-                </div>
-                <div className="text-sm text-gray-600">Date d'analyse</div>
-              </div>
-            </div>
+            )}
 
+            {/* Onglet NLP */}
+            {activeTab === 'nlp' && (
+              <div className="space-y-4">
+                {nlpData ? (
+                  <NLPInsightsCard
+                    nlpData={nlpData.nlp_results}
+                    loading={nlpLoading}
+                    onReanalyze={reanalyzeNLP}
+                    showReanalyzeButton={true}
+                  />
+                ) : nlpLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loading size="lg" text="Chargement des insights NLP..." />
+                  </div>
+                ) : nlpError ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                    <div className="flex items-center">
+                      <div className="text-yellow-600 mr-3">⚠️</div>
+                      <div>
+                        <h3 className="text-sm font-medium text-yellow-800">
+                          Analyse NLP non disponible
+                        </h3>
+                        <p className="text-sm text-yellow-700 mt-1">
+                          {nlpError}
+                        </p>
+                        <button
+                          onClick={reanalyzeNLP}
+                          className="mt-3 inline-flex items-center px-3 py-2 border border-yellow-300 shadow-sm text-sm leading-4 font-medium rounded-md text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Analyser maintenant
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                    <div className="text-center">
+                      <Brain className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        Aucune analyse NLP disponible
+                      </h3>
+                      <p className="text-gray-600 mb-4">
+                        Cette analyse n'a pas encore été traitée par le système NLP.
+                      </p>
+                      <button
+                        onClick={reanalyzeNLP}
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                      >
+                        <Brain className="w-4 h-4 mr-2" />
+                        Analyser maintenant
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         )}

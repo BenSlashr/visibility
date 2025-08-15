@@ -38,6 +38,7 @@ class Analysis(BaseModel):
     ai_model = relationship("AIModel")  # Nouvelle relation
     competitors = relationship("AnalysisCompetitor", back_populates="analysis", cascade="all, delete-orphan")
     sources = relationship("AnalysisSource", back_populates="analysis", cascade="all, delete-orphan")
+    topics = relationship("AnalysisTopics", back_populates="analysis", cascade="all, delete-orphan", uselist=False)
     
     # Index cruciaux pour performance
     __table_args__ = (

@@ -24,6 +24,7 @@ class Prompt(BaseModel):
     ai_models = relationship("PromptAIModel", back_populates="prompt", cascade="all, delete-orphan")  # Multi-agents
     tags = relationship("PromptTag", back_populates="prompt", cascade="all, delete-orphan")
     analyses = relationship("Analysis", back_populates="prompt", cascade="all, delete-orphan")
+    serp_associations = relationship("PromptSERPAssociation", back_populates="prompt", cascade="all, delete-orphan")
     
     # Index pour optimiser les requêtes
     __table_args__ = (

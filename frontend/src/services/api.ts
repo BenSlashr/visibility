@@ -25,8 +25,18 @@ const API_BASE_URL = envAny.VITE_API_URL || 'http://localhost:8021'
 const API_TIMEOUT = Number(envAny.VITE_API_TIMEOUT) || 30000
 const DEV_MODE = envAny.VITE_DEV_MODE === 'true'
 
+// Base URL pour les appels API en production (avec base path)
+const getApiBaseUrl = () => {
+  if (import.meta.env.PROD) {
+    // En production, utiliser le chemin relatif avec le base path
+    return '/nom-outil/api/v1'
+  }
+  // En développement, utiliser l'URL complète
+  return `${API_BASE_URL}/api/v1`
+}
+
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1`,
+  baseURL: getApiBaseUrl(),
   timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',

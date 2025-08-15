@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],
+        default=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "*"],
         env="BACKEND_CORS_ORIGINS"
     )
     
@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     
     # Logs
     LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
+    
+    # Déploiement
+    ROOT_PATH: str = Field(default="", env="ROOT_PATH")
     
     class Config:
         env_file = ".env"

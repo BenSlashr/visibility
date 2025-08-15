@@ -1,5 +1,5 @@
 import React from 'react'
-import { MessageSquare, Play, Edit, Trash, Copy, Users, User } from 'lucide-react'
+import { MessageSquare, Play, Edit, Trash, Copy, Users, User, Eye } from 'lucide-react'
 import { Button, Badge, Card } from './ui'
 
 interface PromptCardProps {
@@ -8,6 +8,7 @@ interface PromptCardProps {
   onDelete?: (promptId: string) => void
   onRun?: (prompt: any) => void
   onDuplicate?: (prompt: any) => void
+  onDetails?: (prompt: any) => void
   isExecuting?: boolean
 }
 
@@ -17,6 +18,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
   onDelete,
   onRun,
   onDuplicate,
+  onDetails,
   isExecuting = false
 }) => {
   const formatDate = (dateString: string) => {
@@ -165,6 +167,15 @@ export const PromptCard: React.FC<PromptCardProps> = ({
         </div>
 
         <div className="flex items-center space-x-1">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onDetails?.(prompt)}
+            title="Voir les détails et association SERP"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          
           <Button
             variant="secondary"
             size="sm"

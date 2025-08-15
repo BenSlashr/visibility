@@ -14,10 +14,13 @@ const queryClient = new QueryClient({
   },
 })
 
+// Base path pour le déploiement
+const basename = import.meta.env.PROD ? '/nom-outil' : '';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={basename}>
         <App />
       </BrowserRouter>
     </QueryClientProvider>

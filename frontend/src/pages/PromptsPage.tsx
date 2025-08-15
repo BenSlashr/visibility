@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Plus, Search, MessageSquare, AlertCircle, FolderOpen, Play, Edit2, Trash2, PlayCircle, Users, User, Upload } from 'lucide-react'
+import { Plus, Search, MessageSquare, AlertCircle, FolderOpen, Play, Edit2, Trash2, PlayCircle, Users, User, Upload, Eye } from 'lucide-react'
 import { Button, Input, Modal, Loading, Badge, Table } from '../components/ui'
 import { usePrompts } from '../hooks/usePrompts'
 import { usePromptStats } from '../hooks/usePromptStats'
@@ -9,6 +9,7 @@ import { PromptsAPI } from '../services/prompts'
 import type { PromptCreate } from '../types/prompt'
 import type { AIModel } from '../types/aiModel'
 import { MultiSelect } from '../components/ui'
+import PromptDetailsModal from '../components/prompts/PromptDetailsModal'
 
 export const PromptsPage: React.FC = () => {
   const { currentProject } = useCurrentProject()
@@ -29,6 +30,7 @@ export const PromptsPage: React.FC = () => {
   const [isConfirmingImport, setIsConfirmingImport] = useState(false)
   const [upsertByName, setUpsertByName] = useState(true)
   const [importError, setImportError] = useState<string | null>(null)
+  const [selectedPromptForDetails, setSelectedPromptForDetails] = useState<any>(null)
 
   // Filtrage des prompts
   const filteredPrompts = prompts.filter(prompt =>
@@ -405,6 +407,15 @@ export const PromptsPage: React.FC = () => {
             ) : (
               <Play className="h-3 w-3" />
             )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedPromptForDetails(prompt)}
+            className="h-8 w-8 p-0"
+            title="Voir détails et SERP"
+          >
+            <Eye className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
@@ -808,6 +819,13 @@ export const PromptsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Modal détails prompt avec SERP */}
+      <PromptDetailsModal
+        isOpen={!!selectedPromptForDetails}
+        onClose={() => setSelectedPromptForDetails(null)}
+        prompt={selectedPromptForDetails}
+      />
     </div>
   )
 }

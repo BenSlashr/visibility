@@ -7,7 +7,10 @@ import {
   BarChart3, 
   Settings,
   Eye,
-  Link2
+  Link2,
+  Target,
+  Brain,
+  TrendingUp
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { ProjectSelector } from './ProjectSelector'
@@ -18,7 +21,10 @@ const navigation = [
   { name: 'Projets', href: '/projects', icon: FolderOpen },
   { name: 'Prompts', href: '/prompts', icon: MessageSquare },
   { name: 'Analyses', href: '/analyses', icon: BarChart3 },
+  { name: 'SERP & Corrélations', href: '/serp', icon: TrendingUp },
   { name: 'Sources', href: '/sources', icon: Link2 },
+  { name: 'Gap Analysis', href: '/gap-analysis', icon: Target },
+  { name: 'NLP Insights', href: '/nlp-insights', icon: Brain },
   { name: 'Paramètres', href: '/settings', icon: Settings },
 ]
 

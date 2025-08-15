@@ -11,7 +11,7 @@ import type {
 
 export class AnalysesAPI {
   // Récupérer toutes les analyses avec filtres avancés
-  static async getAll(filters?: AnalysisFilters): Promise<AnalysisSummary[]> {
+  static async getAll(filters?: AnalysisFilters & { prompt_text?: string }): Promise<AnalysisSummary[]> {
     try {
       return await ApiClient.get<AnalysisSummary[]>('/analyses/', filters)
     } catch (error) {
@@ -117,6 +117,49 @@ export class AnalysesAPI {
       return await ApiClient.get<AnalysisSummary[]>(`/analyses/recent/${days}`, { limit })
     } catch (error) {
       console.error(`❌ Erreur lors de la récupération des analyses récentes (${days} jours):`, error)
+      throw error
+    }
+  }
+
+  // 🎯 GAP ANALYSIS
+  static async getGapAnalysis(params: { 
+    project_id: string
+    date_from?: string
+    date_to?: string
+    competitor_filter?: string
+    priority_filter?: string
+  }): Promise<{
+    gaps: Array<{
+      id: string
+      query: string
+      prompt_id: string
+      competitor_name: string
+      competitor_mentions: number
+      competitor_rate: number
+      our_mentions: number
+      our_rate: number
+      gap_score: number
+      frequency_estimate: number
+      last_seen: string
+      gap_type: 'critical' | 'medium' | 'low'
+      business_relevance: 'high' | 'medium' | 'low'
+      suggested_action: string
+      content_exists: boolean
+    }>
+    stats: {
+      total_gaps: number
+      critical_gaps: number
+      medium_gaps: number
+      low_gaps: number
+      average_gap_score: number
+      potential_monthly_mentions: number
+      total_analyses_analyzed: number
+    }
+  }> {
+    try {
+      return await ApiClient.get<any>('/analyses/gap-analysis', params)
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération du gap analysis:', error)
       throw error
     }
   }

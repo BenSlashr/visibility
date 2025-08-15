@@ -26,6 +26,13 @@ from .analysis import (
     AnalysisStats, ProjectAnalysisStats, CompetitorAnalysisStats
 )
 
+from .serp import (
+    SERPImportCreate, SERPImport, SERPImportResponse,
+    SERPKeywordCreate, SERPKeywordUpdate, SERPKeyword, SERPKeywordListResponse,
+    PromptSERPAssociationCreate, PromptSERPAssociationUpdate, PromptSERPAssociation, PromptSERPAssociationResponse,
+    AutoMatchResponse, SERPSummaryResponse, MatchingSuggestion, SERPCorrelationData, ProjectSERPCorrelation
+)
+
 # Export pour faciliter les imports
 __all__ = [
     # Base
@@ -47,5 +54,11 @@ __all__ = [
     # Analysis
     'AnalysisCreate', 'AnalysisUpdate', 'AnalysisRead', 'AnalysisSummary',
     'AnalysisCompetitorCreate', 'AnalysisCompetitorRead',
-    'AnalysisStats', 'ProjectAnalysisStats', 'CompetitorAnalysisStats'
+    'AnalysisStats', 'ProjectAnalysisStats', 'CompetitorAnalysisStats',
+    
+    # SERP
+    'SERPImportCreate', 'SERPImport', 'SERPImportResponse',
+    'SERPKeywordCreate', 'SERPKeywordUpdate', 'SERPKeyword', 'SERPKeywordListResponse',
+    'PromptSERPAssociationCreate', 'PromptSERPAssociationUpdate', 'PromptSERPAssociation', 'PromptSERPAssociationResponse',
+    'AutoMatchResponse', 'SERPSummaryResponse', 'MatchingSuggestion', 'SERPCorrelationData', 'ProjectSERPCorrelation'
 ] 

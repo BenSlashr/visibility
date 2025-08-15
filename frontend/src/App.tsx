@@ -7,6 +7,9 @@ import { SettingsPage } from './pages/SettingsPage'
 import { DashboardV2Page } from './pages/DashboardV2Page'
 import { DashboardV3Page } from './pages/DashboardV3Page'
 import { SourcesPage } from './pages/SourcesPage'
+import { GapAnalysisPage } from './pages/GapAnalysisPage'
+import { NLPInsightsPage } from './pages/NLPInsightsPage'
+import { SERPPage } from './pages/SERPPage'
 import { Sidebar } from './components/Sidebar'
 import { ProjectProvider } from './contexts/ProjectContext'
 
@@ -27,7 +30,10 @@ function App() {
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/prompts" element={<PromptsPage />} />
             <Route path="/analyses" element={<AnalysesPage />} />
+            <Route path="/serp" element={<SERPPage />} />
             <Route path="/sources" element={<SourcesPage />} />
+            <Route path="/gap-analysis" element={<GapAnalysisPage />} />
+            <Route path="/nlp-insights" element={<NLPInsightsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>

@@ -65,7 +65,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     debug=settings.DEBUG,
-    lifespan=lifespan
+    lifespan=lifespan,
+    # Support du root path pour le déploiement avec reverse proxy
+    root_path=settings.ROOT_PATH
 )
 
 # Configuration CORS pour le développement
