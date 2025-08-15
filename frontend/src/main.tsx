@@ -15,7 +15,7 @@ const queryClient = new QueryClient({
 })
 
 // Base path pour le déploiement
-const basename = import.meta.env.PROD ? '/nom-outil' : '';
+const basename = import.meta.env.PROD ? '/visibility' : '';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

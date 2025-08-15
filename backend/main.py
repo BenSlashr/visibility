@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -215,11 +216,11 @@ from fastapi.staticfiles import StaticFiles
 app.include_router(api_router, prefix="/api/v1")
 
 # Servir les fichiers statiques (frontend)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Route pour servir l'index.html à la racine et pour toutes les routes frontend
 from fastapi.responses import FileResponse
-import os
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def serve_spa(full_path: str):

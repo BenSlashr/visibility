@@ -29,7 +29,7 @@ const DEV_MODE = envAny.VITE_DEV_MODE === 'true'
 const getApiBaseUrl = () => {
   if (import.meta.env.PROD) {
     // En production, utiliser le chemin relatif avec le base path
-    return '/nom-outil/api/v1'
+    return '/visibility/api/v1'
   }
   // En développement, utiliser l'URL complète
   return `${API_BASE_URL}/api/v1`

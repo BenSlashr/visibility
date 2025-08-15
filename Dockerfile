@@ -57,15 +57,17 @@ COPY --from=backend-builder /usr/local/bin/ /usr/local/bin/
 COPY ./backend/ ./backend/
 
 # Copier les fichiers buildés du frontend
-COPY --from=frontend-builder /app/frontend/dist ./backend/static
+COPY --from=frontend-builder /app/dist ./backend/static
 
-# Créer le dossier data et changer la propriété vers l'utilisateur app
+# Créer le dossier data avec les bonnes permissions
 RUN mkdir -p /app/backend/data && chown -R app:app /app
+
+# Changer vers l'utilisateur app
 USER app
 
 # Variables d'environnement pour la production
 ENV PYTHONPATH="/app/backend"
-ENV ROOT_PATH="/nom-outil"
+ENV ROOT_PATH="/visibility"
 
 # Exposition du port
 EXPOSE 8080
@@ -74,5 +76,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"
 
-# Point d'entrée
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--root-path", "/nom-outil"]
+# Point d'entrée  
+WORKDIR /app/backend
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--root-path", "/visibility"]
