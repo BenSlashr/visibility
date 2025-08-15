@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -208,8 +208,39 @@ async def app_info():
         "request_timeout": settings.REQUEST_TIMEOUT
     }
 
+# Servir les fichiers statiques du frontend
+from fastapi.staticfiles import StaticFiles
+
 # Inclusion du routeur principal API v1
 app.include_router(api_router, prefix="/api/v1")
+
+# Servir les fichiers statiques (frontend)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Route pour servir l'index.html à la racine et pour toutes les routes frontend
+from fastapi.responses import FileResponse
+import os
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str):
+    """
+    Servir le frontend SPA pour toutes les routes non-API
+    """
+    # Si c'est une route API, ne pas intercepter
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    
+    # Si c'est un fichier statique, le servir
+    static_file_path = f"static/{full_path}"
+    if os.path.exists(static_file_path) and os.path.isfile(static_file_path):
+        return FileResponse(static_file_path)
+    
+    # Sinon, servir index.html pour le SPA
+    index_path = "static/index.html"
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 # Middleware de logging des requêtes (optionnel)
 @app.middleware("http")

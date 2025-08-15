@@ -35,11 +35,7 @@ venv.bak/
 .env.local
 .env.production
 
-# Database
-data/
-*.db
-*.sqlite
-*.sqlite3
+
 
 # Node.js
 node_modules/
