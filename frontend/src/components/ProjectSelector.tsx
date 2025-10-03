@@ -4,12 +4,14 @@ import { useCurrentProject } from '../contexts/ProjectContext'
 import { useProjects } from '../hooks/useProjects'
 import { Button, Loading } from './ui'
 import { clsx } from 'clsx'
+import { useNavigate } from 'react-router-dom'
 
 export const ProjectSelector: React.FC = () => {
   const { currentProject, setCurrentProject } = useCurrentProject()
   const { projects, loading: projectsLoading } = useProjects()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   // Fermer le dropdown en cliquant à l'extérieur
   useEffect(() => {
@@ -38,6 +40,11 @@ export const ProjectSelector: React.FC = () => {
     
     // Scroll vers le haut pour voir le changement
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCreateNewProject = () => {
+    setIsOpen(false)
+    navigate('/projects?create=true')
   }
 
   if (projectsLoading) {
@@ -139,7 +146,12 @@ export const ProjectSelector: React.FC = () => {
 
           {/* Footer */}
           <div className="px-3 py-2 border-t border-gray-100">
-            <Button variant="ghost" size="sm" className="w-full justify-start">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full justify-start"
+              onClick={handleCreateNewProject}
+            >
               <Plus className="h-3 w-3 mr-2" />
               Nouveau projet
             </Button>

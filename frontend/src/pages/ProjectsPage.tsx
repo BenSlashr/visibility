@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Plus, Search, TrendingUp, BarChart3, DollarSign, Trash2, ExternalLink } from 'lucide-react'
 import { ProjectCard } from '../components/ProjectCard'
 import { Button, Input, Modal, Loading } from '../components/ui'
 import { useProjects } from '../hooks/useProjects'
 import { useCompetitors } from '../hooks/useCompetitors'
 import { useCurrentProject } from '../contexts/ProjectContext'
+import { useSearchParams } from 'react-router-dom'
 import type { ProjectCreate, ProjectUpdate, ProjectSummary, CompetitorCreate } from '../types/project'
 
 interface ProjectFormData {
@@ -18,6 +19,7 @@ interface ProjectFormData {
 export const ProjectsPage: React.FC = () => {
   const { projects, loading, error, createProject, updateProject, deleteProject, refresh } = useProjects()
   const { currentProject, setCurrentProject } = useCurrentProject()
+  const [searchParams, setSearchParams] = useSearchParams()
   
   const [searchTerm, setSearchTerm] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -49,6 +51,16 @@ export const ProjectsPage: React.FC = () => {
     name: '',
     website: ''
   })
+
+  // Ouvrir la modal de création si le paramètre create=true est présent
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setIsCreateModalOpen(true)
+      // Supprimer le paramètre de l'URL
+      searchParams.delete('create')
+      setSearchParams(searchParams)
+    }
+  }, [searchParams, setSearchParams])
 
   // Filtrage des projets
   const filteredProjects = projects.filter(project =>
